@@ -1523,6 +1523,7 @@ function route(){
   if(p[0]==="quiz") return viewQuiz(+p[1]);
   if(p[0]==="final") return viewFinal();
   if(p[0]==="race") return viewRace();
+  if(p[0]==="board") return viewBoard();
   if(p[0]==="result"&&lastResult) return lastResult();
   if(p[0]==="edf") return viewEdf();
   if(p[0]==="cheat") return viewCheat();
@@ -1601,6 +1602,7 @@ function viewHome(){
     h("div",{class:"row"},[
       h("a",{class:"btn"+(finalOpen()?"":" sec"),href:"#/final",text:(finalOpen()?"🏁":"🔒")+" Végső teszt"}),
       h("a",{class:"btn"+(raceOpen()?"":" sec"),href:"#/race",text:(raceOpen()?"⚡":"🔒")+" Verseny"}),
+      h("a",{class:"btn sec",href:"#/board",text:"🏆 Ranglista"}),
       h("a",{class:"btn sec",href:"#/edf",text:"🟥 EDF-eltérések"}),
       h("a",{class:"btn sec",href:"#/cheat",text:"📌 Gyorstár"})
     ])
@@ -2038,6 +2040,17 @@ function viewRace(){
   show(out);
   syncBoard();
 }
+function viewBoard(){
+  var out=[];
+  out.push(h("div",{class:"crumbs"},[h("a",{href:"#/",text:"← Főoldal"})]));
+  out.push(h("h1",{text:"🏆 Ranglista"}));
+  out.push(h("p",{text:"A versenyen elért legjobb eredmények. Mindenkinek a legjobb eredménye látszik."}));
+  boardHost=h("div",{}); renderBoard(boardHost); out.push(boardHost);
+  out.push(h("div",{class:"row",style:"margin-top:14px"},[h("a",{class:"btn",href:"#/race",text:raceOpen()?"⚡ Verseny indítása":"🔒 Verseny"})]));
+  out.push(footer(false));
+  show(out);
+  syncBoard();
+}
 function startRace(name){
   runQuiz({
     title:"Verseny – "+name, crumb:["#/race","Verseny"], questions:buildSet(), race:true, again:function(){startRace(name);}, breakdown:breakdown,
@@ -2051,7 +2064,7 @@ function startRace(name){
       rankHost=h("p",{class:"muted"}); rankInfo={name:name}; out.push(rankHost); renderRank();
       if(boardOn()&&(load().outbox||[]).length) out.push(h("p",{class:"muted",text:"Az eredményed beküldése folyamatban van a ranglistára."}));
     },
-    extraBtns:function(){ return [ab("","🏆 Ranglista",{href:"#/race"})]; }
+    extraBtns:function(){ return [ab("","🏆 Ranglista",{href:"#/board"})]; }
   });
 }
 
