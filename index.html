@@ -1633,6 +1633,36 @@ function viewHome(){
   out.push(footer(true));
   show(out);
 }
+var APP_VER="2026-11-19.6";
+var updBox=null;
+function isWeb(){ return /^https?:$/.test(location.protocol); }
+function remoteVer(){
+  return fetch(location.pathname+"?_="+Date.now(),{cache:"no-store"}).then(function(r){ return r.text(); }).then(function(t){ var m=t.match(/var APP_VER="([^"]+)"/); return m?m[1]:null; });
+}
+function applyUpdate(){
+  var p=Promise.resolve();
+  if(window.caches&&caches.keys) p=caches.keys().then(function(k){ return Promise.all(k.map(function(x){ return caches.delete(x); })); });
+  p=p.then(function(){ return navigator.serviceWorker&&navigator.serviceWorker.getRegistrations?navigator.serviceWorker.getRegistrations().then(function(rs){ return Promise.all(rs.map(function(r){ return r.unregister(); })); }):0; });
+  p.then(function(){ location.reload(); },function(){ location.reload(); });
+}
+function checkUpdate(manual){
+  if(!updBox||!document.body.contains(updBox)) return;
+  if(!isWeb()){ if(manual){ updBox.textContent=""; updBox.appendChild(h("p",{class:"muted",text:"A frissítés-ellenőrzés csak a telepített, webes változatban érhető el."})); } return; }
+  if(manual){ updBox.textContent=""; updBox.appendChild(h("p",{class:"muted",text:"Ellenőrzés…"})); }
+  if(navigator.onLine===false){ if(manual){ updBox.textContent=""; updBox.appendChild(h("p",{class:"muted",text:"Nincs internetkapcsolat, a frissítés-ellenőrzéshez internet kell."})); } return; }
+  remoteVer().then(function(v){
+    if(!updBox||!document.body.contains(updBox)) return;
+    updBox.textContent="";
+    if(v&&v!==APP_VER){
+      updBox.appendChild(h("div",{class:"card",style:"border:2px solid var(--accent)"},[
+        h("p",{html:"<b>Új verzió érhető el.</b> A haladásod és a neved megmarad."}),
+        h("p",{},[h("button",{class:"btn",text:"🔄 Frissítés most",onclick:function(){ this.disabled=true; this.textContent="Frissítés…"; applyUpdate(); }})])
+      ]));
+    } else if(manual){
+      updBox.appendChild(h("p",{class:"muted",text:"A legújabb verziót használod."}));
+    }
+  }).catch(function(){ if(manual&&updBox){ updBox.textContent=""; updBox.appendChild(h("p",{class:"muted",text:"Az ellenőrzés most nem sikerült. Próbáld újra később."})); } });
+}
 var resetArmed=false;
 function footer(withReset){
   var kids=[];
@@ -1643,6 +1673,13 @@ function footer(withReset){
     }});
     kids.push(h("p",{class:"muted"},["Törli az összes fejezet eredményét, a záróteszt és a verseny helyi eredményeit, a nevedet, és újra zárolja a fejezeteket. Ezen az eszközön nem vonható vissza. A közös ranglistán már szereplő eredményeid nem törlődnek."]));
     kids.push(h("p",{},[b]));
+  }
+  if(withReset){
+    updBox=h("div",{});
+    kids.push(h("p",{class:"muted",text:"Verzió: "+APP_VER}));
+    if(isWeb()) kids.push(h("p",{},[h("button",{class:"btn sec",text:"🔄 Frissítés keresése",onclick:function(){ checkUpdate(true); }})]));
+    kids.push(updBox);
+    setTimeout(function(){ checkUpdate(false); },600);
   }
   return h("div",{class:"foot"},kids);
 }
