@@ -74,6 +74,8 @@ p{margin:6px 0}
 .btn.resetbtn:hover{background:#b3261e;color:#fff}
 @media (prefers-color-scheme:dark){.btn.resetbtn{color:#ff8a80;border-color:#ff8a80}.btn.resetbtn:hover{background:#b3261e;color:#fff;border-color:#b3261e}}
 #app:focus,#app:focus-visible{outline:none}
+.tbl tr.me td{background:rgba(232,87,42,.16);font-weight:700}
+.btn[disabled]{cursor:not-allowed}
 .btn.danger{background:#b3261e;color:#fff;padding:8px 14px}
 .btn.ghost{background:transparent;color:var(--accent);padding:8px 10px}
 .btn.menu{display:block;width:100%;text-align:center;font-size:18px;padding:16px 20px;margin-top:10px;background:var(--card);color:var(--ink);border:2px solid var(--accent)}
@@ -1536,6 +1538,9 @@ window.addEventListener("popstate",function(ev){
 });
 try{ history.replaceState({p:fromHash()},"",location.href); }catch(e){}
 window.addEventListener("hashchange",function(){ var n=fromHash(); if(n!==cur){ cur=n; route(); } });
+window.addEventListener("online",function(){ syncBoard(); });
+window.addEventListener("offline",function(){ refreshBoardView(); });
+setTimeout(syncBoard,1200);
 
 
 /* ---------- felsorolásos tagolás ---------- */
@@ -1634,7 +1639,7 @@ function footer(withReset){
       if(!resetArmed){ resetArmed=true; b.textContent="Biztosan törlöd? Kattints még egyszer"; b.className="btn danger"; setTimeout(function(){ if(resetArmed){ resetArmed=false; b.textContent="🗑 Tanulási eredmények törlése"; b.className="btn resetbtn"; } },6000); return; }
       resetArmed=false; mem={}; mem=null; try{localStorage.removeItem(KEY);}catch(e){} viewHome();
     }});
-    kids.push(h("p",{class:"muted"},["Törli az összes fejezet eredményét, a záróteszt és a verseny eredményeit (a ranglistát is), és újra zárolja a fejezeteket. Ezen az eszközön nem vonható vissza."]));
+    kids.push(h("p",{class:"muted"},["Törli az összes fejezet eredményét, a záróteszt és a verseny helyi eredményeit, a nevedet, és újra zárolja a fejezeteket. Ezen az eszközön nem vonható vissza. A közös ranglistán már szereplő eredményeid nem törlődnek."]));
     kids.push(h("p",{},[b]));
   }
   return h("div",{class:"foot"},kids);
@@ -1945,6 +1950,70 @@ function startFinal(){
 }
 
 /* ---------- verseny ---------- */
+var BOARD_URL="https://script.google.com/macros/s/AKfycbzy1YYDw5GxLDKxLy5WtcTfR1zbaBO0Qx33fJjyEgCF7wg7PiVeX-7-keN3KC9wa7m8/exec";   /* közös ranglista webcíme (Google Apps Script); üresen: csak helyi ranglista */
+var boardBusy=false, boardHost=null, rankHost=null, rankInfo=null;
+function boardOn(){ return !!BOARD_URL; }
+function newId(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,8); }
+function nameOk(n){ n=(n||"").trim(); return n.length>=2 && n.toLowerCase()!=="névtelen" && n.toLowerCase()!=="nevtelen"; }
+function boardRows(){
+  var s=load(), rows;
+  if(boardOn()){
+    var remote=(s.board&&s.board.rows)||[], ids={};
+    remote.forEach(function(r){ ids[r.id]=1; });
+    rows=remote.concat((s.outbox||[]).filter(function(r){ return !ids[r.id]; }));
+  } else rows=s.race.slice();
+  var best={};
+  rows.forEach(function(r){ var k=String(r.n).toLowerCase(); if(!best[k]||r.p>best[k].p) best[k]=r; });
+  return Object.keys(best).map(function(k){return best[k];}).sort(function(a,b){ return b.p-a.p || String(a.d).localeCompare(String(b.d)); });
+}
+function renderBoard(host){
+  var s=load(), rows=boardRows(), me=(s.name||"").toLowerCase();
+  host.textContent="";
+  host.appendChild(h("h2",{text:boardOn()?"Ranglista":"Ranglista (ezen az eszközön)"}));
+  if(boardOn()){
+    var pend=(s.outbox||[]).length, msg;
+    if(pend) msg=pend+" eredményed elküldésre vár, amint van internet, magától elküldi az app.";
+    else if(s.board&&s.board.at) msg="Utoljára frissítve: "+s.board.at+(navigator.onLine===false?" (offline, a legutóbbi mentett lista látszik)":".");
+    else msg=navigator.onLine===false?"Offline vagy, a közös lista még nem érhető el.":"A közös lista betöltése…";
+    host.appendChild(h("p",{class:"muted",text:msg}));
+  }
+  if(!rows.length){ host.appendChild(h("p",{class:"muted",text:"Még nincs eredmény a ranglistán."})); return; }
+  var tb=h("table",{class:"tbl"},[h("tr",{},[h("th",{text:"#"}),h("th",{text:"Név"}),h("th",{text:"Helyes · %"}),h("th",{text:"Pont"})])]);
+  rows.forEach(function(r,i){
+    var tr=h("tr",{},[h("td",{text:String(i+1)}),h("td",{text:r.n+" · "+r.d}),h("td",{text:r.c+" / "+r.t+" · "+pct(r.c,r.t)+"%"}),h("td",{text:String(r.p)})]);
+    if(me&&String(r.n).toLowerCase()===me) tr.className="me";
+    tb.appendChild(tr);
+  });
+  host.appendChild(tb);
+}
+function renderRank(){
+  if(!rankHost||!rankInfo||!document.body.contains(rankHost)) return;
+  var rows=boardRows(), i=-1, nm=rankInfo.name.toLowerCase();
+  rows.forEach(function(r,k){ if(i<0&&String(r.n).toLowerCase()===nm) i=k; });
+  rankHost.textContent=i>=0?"Helyezésed a ranglistán: "+(i+1)+". ("+rows.length+" résztvevő közül)":"";
+}
+function refreshBoardView(){
+  if(boardHost&&document.body.contains(boardHost)) renderBoard(boardHost);
+  renderRank();
+}
+function syncBoard(){
+  if(!boardOn()||boardBusy||navigator.onLine===false) return;
+  boardBusy=true;
+  var box=(load().outbox||[]).slice();
+  Promise.all(box.map(function(r){
+    return fetch(BOARD_URL,{method:"POST",mode:"no-cors",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify(r)}).catch(function(){});
+  })).then(function(){ return fetch(BOARD_URL+(BOARD_URL.indexOf("?")<0?"?":"&")+"t="+Date.now()); })
+  .then(function(r){ return r.json(); })
+  .then(function(j){
+    if(j&&j.rows){
+      var s=load(), ids={}; j.rows.forEach(function(r){ ids[r.id]=1; });
+      s.board={rows:j.rows,at:stamp()};
+      s.outbox=(s.outbox||[]).filter(function(r){ return !ids[r.id]; });
+      save();
+    }
+    boardBusy=false; refreshBoardView();
+  }).catch(function(){ boardBusy=false; refreshBoardView(); });
+}
 function viewRace(){
   if(!raceOpen()) return viewGate("A verseny még zárolt","A verseny a végső teszt sikeres teljesítése (legalább "+PASS+"%) után nyílik meg.","#/final","Ugrás a végső teszthez");
   var st=load(), out=[];
@@ -1952,25 +2021,35 @@ function viewRace(){
   out.push(h("h1",{text:"⚡ Verseny"}));
   out.push(h("p",{text:"Ugyanaz a "+FINAL_N+" kérdéses minta, mint a végső tesztnél, de pontozással: csak a helyes válasz ér pontot, és minél gyorsabban válaszolsz a "+TIME+" másodpercből, annál többet. Rossz vagy lejárt válasz 0 pont."}));
   out.push(h("div",{class:"card"},[h("p",{html:"<b>Pontozás:</b> helyes válasz = <b>"+POINTS_MAX+" × (hátralévő idő / "+TIME+" mp)</b> pont, legalább "+POINTS_MIN+" pont. Azonnali válasz ≈ "+POINTS_MAX+" pont, a "+(TIME/2)+". másodpercben ≈ "+(POINTS_MAX/2)+" pont. Elérhető maximum: "+(POINTS_MAX*FINAL_N).toLocaleString("hu-HU")+" pont."})]));
-  var name=h("input",{class:"search",type:"text",maxlength:"24",placeholder:"Neved a ranglistához","aria-label":"Neved",value:st.name||""});
-  out.push(h("div",{class:"row",style:"margin-top:14px"},[name,h("button",{class:"btn",text:"Verseny indítása",onclick:function(){ var s=load(); s.name=name.value.trim().slice(0,24)||"Névtelen"; save(); startRace(s.name); }})]));
-  var top=st.race.slice().sort(function(a,b){return b.p-a.p;}).slice(0,10);
-  if(top.length){
-    out.push(h("h2",{text:"Ranglista (ezen az eszközön)"}));
-    var tb=h("table",{class:"tbl"},[h("tr",{},[h("th",{text:"#"}),h("th",{text:"Név"}),h("th",{text:"Helyes · %"}),h("th",{text:"Pont"})])]);
-    top.forEach(function(r,i){ tb.appendChild(h("tr",{},[h("td",{text:String(i+1)}),h("td",{text:r.n+" · "+r.d}),h("td",{text:r.c+" / "+r.t+" · "+pct(r.c,r.t)+"%"}),h("td",{text:String(r.p)})])); });
-    out.push(tb);
-  }
+  var name=h("input",{class:"search",type:"text",maxlength:"24",placeholder:"Neved a ranglistához (kötelező)","aria-label":"Neved",value:nameOk(st.name)?st.name:""});
+  var go=h("button",{class:"btn",text:"Verseny indítása",onclick:function(){
+    var v=name.value.trim().slice(0,24); if(!nameOk(v)) return;
+    var s=load(); s.name=v; save(); startRace(v);
+  }});
+  var hint=h("p",{class:"muted",style:"margin:6px 0 0"});
+  function upd(){ var ok=nameOk(name.value); go.disabled=!ok; go.style.opacity=ok?"":".5"; hint.textContent=ok?"":"A verseny indításához add meg a neved (legalább 2 karakter). Ez a név látszik a ranglistán."; }
+  name.addEventListener("input",upd); upd();
+  out.push(h("div",{class:"row",style:"margin-top:14px"},[name,go]));
+  out.push(hint);
+  boardHost=h("div",{});
+  renderBoard(boardHost);
+  out.push(boardHost);
   out.push(footer(false));
   show(out);
+  syncBoard();
 }
 function startRace(name){
   runQuiz({
     title:"Verseny – "+name, crumb:["#/race","Verseny"], questions:buildSet(), race:true, again:function(){startRace(name);}, breakdown:breakdown,
-    onDone:function(score,total,pts){ var s=load(); s.race.push({n:name,p:pts,c:score,t:total,d:stamp()}); s.race=s.race.sort(function(a,b){return b.p-a.p;}).slice(0,30); save(); },
+    onDone:function(score,total,pts){
+      var s=load(), e={id:newId(),n:name,p:pts,c:score,t:total,d:stamp()};
+      s.race.push(e); s.race=s.race.sort(function(a,b){return b.p-a.p;}).slice(0,30);
+      if(boardOn()){ s.outbox=(s.outbox||[]).concat([e]); }
+      save(); syncBoard();
+    },
     after:function(out,pts){
-      var s=load(), rank=s.race.slice().sort(function(a,b){return b.p-a.p;}).findIndex(function(r){return r.p===pts&&r.n===name;})+1;
-      if(rank) out.push(h("p",{class:"muted",text:"Helyezésed a ranglistán: "+rank+"."}));
+      rankHost=h("p",{class:"muted"}); rankInfo={name:name}; out.push(rankHost); renderRank();
+      if(boardOn()&&(load().outbox||[]).length) out.push(h("p",{class:"muted",text:"Az eredményed beküldése folyamatban van a ranglistára."}));
     },
     extraBtns:function(){ return [ab("","🏆 Ranglista",{href:"#/race"})]; }
   });
