@@ -158,11 +158,14 @@ header.top .nav a{padding:8px 4px;margin-left:4px}
 .btn{padding:13px 16px}.opt{min-height:48px}
 .row .btn{flex:1 1 auto;text-align:center}
 }
+@media (max-width:340px){.updbtn .ul{display:none}.updbtn{padding:6px 8px}}
+@media (max-width:420px){.updbtn{padding:6px 7px;margin-left:5px;font-size:12px;gap:3px}}
 @media (max-width:380px){header.top .brand{font-size:15px}header.top .nav a{font-size:12px;margin-left:2px;padding:8px 3px}.q{font-size:16px}h1{font-size:20px}}
 @media (max-width:560px){header.top .bt{display:none}}
 header.top .nav{display:flex;align-items:center}
-.updbtn{background:transparent;border:2px solid transparent;color:#fff;font-size:17px;line-height:1;padding:6px 8px;margin-left:8px;border-radius:12px;cursor:pointer;opacity:.85}
-.updbtn.has{background:#e8572a;border-color:#fff;opacity:1;animation:updp 1.6s ease-in-out infinite}
+.updbtn{display:inline-flex;align-items:center;gap:5px;background:rgba(255,255,255,.14);border:2px solid rgba(255,255,255,.55);color:#fff;font:inherit;font-weight:700;font-size:13px;line-height:1;padding:7px 10px;margin-left:10px;border-radius:12px;cursor:pointer;white-space:nowrap}
+.updbtn:hover{background:rgba(255,255,255,.24)}
+.updbtn.has{background:#e8572a;border-color:#fff;animation:updp 1.6s ease-in-out infinite}
 @keyframes updp{0%,100%{box-shadow:0 0 0 0 rgba(232,87,42,.7)}50%{box-shadow:0 0 0 7px rgba(232,87,42,0)}}
 @media (prefers-reduced-motion:reduce){.updbtn.has{animation:none}}
 #toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);max-width:min(92vw,520px);background:#1f2a44;color:#fff;padding:12px 16px;border-radius:12px;font-weight:600;font-size:15px;box-shadow:0 4px 18px rgba(0,0,0,.35);opacity:0;pointer-events:none;transition:opacity .2s;z-index:50;text-align:center}
@@ -180,7 +183,7 @@ header.top .nav{display:flex;align-items:center}
 </style>
 </head>
 <body>
-<header class="top"><div class="in"><a href="#" data-r="/" class="brand"><span aria-hidden="true">🏐</span><span class="bt"> Dodgeball elearning</span></a><span class="sp"></span><nav class="nav"><a href="#" data-r="/edf">EDF</a><a href="#" data-r="/cheat">Gyorstár</a><a href="#" data-r="/final">Teszt</a><a href="#" data-r="/race">Verseny</a><button id="updbtn" class="updbtn" type="button" title="Frissítés keresése" aria-label="Frissítés keresése">🔄</button></nav></div></header>
+<header class="top"><div class="in"><a href="#" data-r="/" class="brand"><span aria-hidden="true">🏐</span><span class="bt"> Dodgeball elearning</span></a><span class="sp"></span><nav class="nav"><a href="#" data-r="/edf">EDF</a><a href="#" data-r="/cheat">Gyorstár</a><a href="#" data-r="/final">Teszt</a><a href="#" data-r="/race">Verseny</a><button id="updbtn" class="updbtn" type="button" title="Frissítés keresése" aria-label="Frissítés keresése"><span aria-hidden="true">🔄</span><span class="ul">Frissítés</span></button></nav></div></header>
 <div id="toast" role="status" aria-live="polite"></div>
 <main id="app" tabindex="-1"></main>
 <script>
@@ -1559,7 +1562,7 @@ window.addEventListener("popstate",function(ev){
 try{ history.replaceState({p:fromHash()},"",location.href); }catch(e){}
 window.addEventListener("hashchange",function(){ var n=fromHash(); if(n!==cur){ cur=n; route(); } });
 window.addEventListener("online",function(){ syncBoard(); checkUpdate(false); });
-(function(){ var ub=document.getElementById("updbtn"); if(!ub) return; if(!isWeb()){ ub.style.display="none"; return; } ub.addEventListener("click",function(){ checkUpdate(true); }); setTimeout(function(){ checkUpdate(false); },1500); document.addEventListener("visibilitychange",function(){ if(!document.hidden) checkUpdate(false); }); })();
+(function(){ var ub=document.getElementById("updbtn"); if(!ub) return; ub.addEventListener("click",function(){ checkUpdate(true); }); if(isWeb()) setTimeout(function(){ checkUpdate(false); },1500); document.addEventListener("visibilitychange",function(){ if(!document.hidden) checkUpdate(false); }); })();
 window.addEventListener("offline",function(){ refreshBoardView(); });
 setTimeout(syncBoard,1200);
 
@@ -1653,7 +1656,7 @@ function viewHome(){
   out.push(footer(true));
   show(out);
 }
-var APP_VER="2026-11-25.8";
+var APP_VER="2026-11-25.9";
 function isWeb(){ return /^https?:$/.test(location.protocol); }
 function remoteVer(){
   return fetch(location.pathname+"?_="+Date.now(),{cache:"no-store"}).then(function(r){ return r.text(); }).then(function(t){ var m=t.match(/var APP_VER="([^"]+)"/); return m?m[1]:null; });
@@ -1672,11 +1675,12 @@ function toast(msg){
 function setUpdState(){
   var b=document.getElementById("updbtn"); if(!b) return;
   b.className="updbtn"+(updAvail?" has":"");
+  var lab=b.querySelector(".ul"); if(lab) lab.textContent=updAvail?"Új verzió!":"Frissítés";
   b.title=updAvail?"Új verzió érhető el, kattints a frissítéshez":"Frissítés keresése";
   b.setAttribute("aria-label",b.title);
 }
 function checkUpdate(manual){
-  if(!isWeb()){ if(manual) toast("A frissítés csak a telepített, webes változatban érhető el."); return; }
+  if(!isWeb()){ if(manual) toast("Ez a letöltött fájl nem frissül magától. Töltsd le újra az új verziót, vagy használd a telepített, webes változatot."); return; }
   if(updAvail&&manual){ toast("Frissítés…"); applyUpdate(); return; }
   if(navigator.onLine===false){ if(manual) toast("Nincs internetkapcsolat, a frissítéshez internet kell."); return; }
   if(updChecking) return;
