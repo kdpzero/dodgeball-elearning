@@ -74,6 +74,17 @@ p{margin:6px 0}
 .btn.resetbtn:hover{background:#b3261e;color:#fff}
 @media (prefers-color-scheme:dark){.btn.resetbtn{color:#ff8a80;border-color:#ff8a80}.btn.resetbtn:hover{background:#b3261e;color:#fff;border-color:#b3261e}}
 #app:focus,#app:focus-visible{outline:none}
+.lb{width:100%;border-collapse:collapse;font-size:16px}
+.lb th,.lb td{padding:12px 8px;border-bottom:1px solid var(--line);text-align:left;vertical-align:middle}
+.lb th{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;padding-top:6px;padding-bottom:6px}
+.lb .n{width:1%;white-space:nowrap;font-weight:700}
+.lb .s{white-space:nowrap;color:var(--muted)}
+.lb .p{white-space:nowrap;text-align:right;font-weight:800;font-variant-numeric:tabular-nums}
+.lb .nm{overflow-wrap:anywhere}
+.lb .who{display:block;font-weight:700}
+.lb .dt{display:block;font-size:13px;color:var(--muted);margin-top:2px}
+.lb tr.me td{background:rgba(232,87,42,.16)}
+@media (max-width:420px){.lb{font-size:15px}.lb th,.lb td{padding:11px 5px}.lb .s{font-size:14px}}
 .tbl tr.me td{background:rgba(232,87,42,.16);font-weight:700}
 .btn[disabled]{cursor:not-allowed}
 .btn.danger{background:#b3261e;color:#fff;padding:8px 14px}
@@ -1633,7 +1644,7 @@ function viewHome(){
   out.push(footer(true));
   show(out);
 }
-var APP_VER="2026-11-19.6";
+var APP_VER="2026-11-25.7";
 var updBox=null;
 function isWeb(){ return /^https?:$/.test(location.protocol); }
 function remoteVer(){
@@ -2005,10 +2016,18 @@ function boardRows(){
   rows.forEach(function(r){ var k=String(r.n).toLowerCase(); if(!best[k]||r.p>best[k].p) best[k]=r; });
   return Object.keys(best).map(function(k){return best[k];}).sort(function(a,b){ return b.p-a.p || String(a.d).localeCompare(String(b.d)); });
 }
-function renderBoard(host){
+function fmtDate(d){
+  d=String(d||"");
+  var m=d.match(/^(\d{4})\.(\d{2})\.(\d{2})\./);
+  if(m) return m[1]+"."+m[2]+"."+m[3]+".";
+  var t=new Date(d);
+  if(isNaN(t.getTime())) return "";
+  return t.getFullYear()+"."+("0"+(t.getMonth()+1)).slice(-2)+"."+("0"+t.getDate()).slice(-2)+".";
+}
+function renderBoard(host,noTitle){
   var s=load(), rows=boardRows(), me=(s.name||"").toLowerCase();
   host.textContent="";
-  host.appendChild(h("h2",{text:boardOn()?"Ranglista":"Ranglista (ezen az eszközön)"}));
+  if(!noTitle||!boardOn()) host.appendChild(h("h2",{text:boardOn()?"Ranglista":"Ranglista (ezen az eszközön)"}));
   if(boardOn()){
     var pend=(s.outbox||[]).length, msg;
     if(pend) msg=pend+" eredményed elküldésre vár, amint van internet, magától elküldi az app.";
@@ -2017,9 +2036,10 @@ function renderBoard(host){
     host.appendChild(h("p",{class:"muted",text:msg}));
   }
   if(!rows.length){ host.appendChild(h("p",{class:"muted",text:"Még nincs eredmény a ranglistán."})); return; }
-  var tb=h("table",{class:"tbl"},[h("tr",{},[h("th",{text:"#"}),h("th",{text:"Név"}),h("th",{text:"Helyes · %"}),h("th",{text:"Pont"})])]);
+  var tb=h("table",{class:"lb"},[h("tr",{},[h("th",{text:"#"}),h("th",{text:"Név"}),h("th",{text:"Eredmény"}),h("th",{class:"p",text:"Pont"})])]);
   rows.forEach(function(r,i){
-    var tr=h("tr",{},[h("td",{text:String(i+1)}),h("td",{text:r.n+" · "+r.d}),h("td",{text:r.c+" / "+r.t+" · "+pct(r.c,r.t)+"%"}),h("td",{text:String(r.p)})]);
+    var nm=h("td",{class:"nm"},[h("span",{class:"who",text:r.n}),h("span",{class:"dt",text:fmtDate(r.d)})]);
+    var tr=h("tr",{},[h("td",{class:"n",text:(i===0?"🏆 ":"")+(i+1)+"."}),nm,h("td",{class:"s",text:r.c+"/"+r.t+" · "+pct(r.c,r.t)+"%"}),h("td",{class:"p",text:String(r.p)})]);
     if(me&&String(r.n).toLowerCase()===me) tr.className="me";
     tb.appendChild(tr);
   });
@@ -2032,7 +2052,7 @@ function renderRank(){
   rankHost.textContent=i>=0?"Helyezésed a ranglistán: "+(i+1)+". ("+rows.length+" résztvevő közül)":"";
 }
 function refreshBoardView(){
-  if(boardHost&&document.body.contains(boardHost)) renderBoard(boardHost);
+  if(boardHost&&document.body.contains(boardHost)) renderBoard(boardHost,!!boardHost.getAttribute("data-nt"));
   renderRank();
 }
 function syncBoard(){
@@ -2082,7 +2102,7 @@ function viewBoard(){
   out.push(h("div",{class:"crumbs"},[h("a",{href:"#/",text:"← Főoldal"})]));
   out.push(h("h1",{text:"🏆 Ranglista"}));
   out.push(h("p",{text:"A versenyen elért legjobb eredmények. Mindenkinek a legjobb eredménye látszik."}));
-  boardHost=h("div",{}); renderBoard(boardHost); out.push(boardHost);
+  boardHost=h("div",{"data-nt":"1"}); renderBoard(boardHost,true); out.push(boardHost);
   out.push(h("div",{class:"row",style:"margin-top:14px"},[h("a",{class:"btn",href:"#/race",text:raceOpen()?"⚡ Verseny indítása":"🔒 Verseny"})]));
   out.push(footer(false));
   show(out);
